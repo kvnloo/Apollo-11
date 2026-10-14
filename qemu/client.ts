@@ -87,7 +87,8 @@ export async function stop(vm: Qemu): Promise<void> {
 	const proc = vm.proc;
 	vm.qmp?.destroy();
 	if (proc.exitCode === null && proc.signalCode === null) {
-		const gone = new Promise<void>((resolve) => proc.once("exit", () => resolve()));
+		// Failed spawn emits close after error, but never emits exit.
+		const gone = new Promise<void>((resolve) => proc.once("close", () => resolve()));
 		proc.kill();
 		await gone;
 	}
