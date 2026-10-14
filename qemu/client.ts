@@ -155,19 +155,26 @@ function command(
 			buffered += chunk;
 			const lines = buffered.split("\n");
 			buffered = lines.pop() ?? "";
-			for (const line of lines) {
-				if (!line.trim()) continue;
-				const message = JSON.parse(line) as QmpMessage;
-				if (message.id === undefined) continue;
-				const request = pending.get(message.id);
-				if (!request) continue;
-				if (message.error) {
-					pending.delete(message.id);
-					request.reject(new Error(message.error.desc));
-				} else if ("return" in message) {
-					pending.delete(message.id);
-					request.resolve();
+			try {
+				for (const line of lines) {
+					if (!line.trim()) continue;
+					const message = JSON.parse(line) as QmpMessage;
+					assert(message !== null && typeof message === "object" && !Array.isArray(message), "Invalid QMP message");
+					if (message.id === undefined) continue;
+					const request = pending.get(message.id);
+					if (!request) continue;
+					if (message.error) {
+						const error = new Error(message.error.desc);
+						pending.delete(message.id);
+						request.reject(error);
+					} else if ("return" in message) {
+						pending.delete(message.id);
+						request.resolve();
+					}
 				}
+			} catch (error) {
+				fail(error instanceof Error ? error : new Error("Invalid QMP message"));
+				qmp.destroy();
 			}
 		});
 	}
