@@ -34,7 +34,7 @@ export async function newDisk(
 export async function start(vm: Qemu): Promise<void> {
 	assert(vm.diskPath !== undefined, "no disk");
 	const socketPath = join(dirname(vm.diskPath), "qmp.sock");
-	vm.proc = spawn(
+	const proc = spawn(
 		"qemu-system-x86_64",
 		[
 			"-display", "none",
@@ -44,8 +44,30 @@ export async function start(vm: Qemu): Promise<void> {
 		],
 		{ stdio: "ignore" },
 	);
-	vm.qmp = await connect(socketPath);
-	await command(vm.qmp, "qmp_capabilities");
+	vm.proc = proc;
+	const lifetime = new AbortController();
+	let qmp: Socket | undefined;
+	const failed = (error: Error) => {
+		lifetime.abort(error);
+		qmp?.destroy();
+	};
+	proc.once("error", failed);
+	proc.once("exit", (code, signal) => failed(new Error(`QEMU exited: ${code ?? signal}`)));
+	try {
+		qmp = await connect(socketPath, lifetime.signal);
+		vm.qmp = qmp;
+		await command(qmp, "qmp_capabilities");
+	} catch (error) {
+		qmp?.destroy();
+		if (proc.pid !== undefined && proc.exitCode === null && proc.signalCode === null) {
+			const gone = new Promise<void>((resolve) => proc.once("exit", () => resolve()));
+			proc.kill();
+			await gone;
+		}
+		vm.proc = undefined;
+		vm.qmp = undefined;
+		throw error;
+	}
 }
 
 export async function screendump(vm: Qemu, path: string): Promise<void> {
@@ -56,63 +78,103 @@ export async function screendump(vm: Qemu, path: string): Promise<void> {
 export async function stop(vm: Qemu): Promise<void> {
 	assert(vm.proc, "not started");
 	const proc = vm.proc;
-	const gone = new Promise<void>((resolve) => proc.once("exit", () => resolve()));
 	vm.qmp?.destroy();
-	proc.kill();
-	await gone;
+	if (proc.exitCode === null && proc.signalCode === null) {
+		const gone = new Promise<void>((resolve) => proc.once("exit", () => resolve()));
+		proc.kill();
+		await gone;
+	}
 	vm.proc = undefined;
 	vm.qmp = undefined;
 }
 
 type QmpMessage = {
+	id?: number;
 	return?: unknown;
 	error?: { desc: string };
 };
 
-function connect(path: string): Promise<Socket> {
-	return new Promise((resolve) => {
+function connect(path: string, signal: AbortSignal): Promise<Socket> {
+	return new Promise((resolve, reject) => {
+		let socket: Socket;
+		let retry: ReturnType<typeof setTimeout> | undefined;
+		const aborted = () => {
+			clearTimeout(retry);
+			socket?.destroy();
+			reject(signal.reason);
+		};
+		if (signal.aborted) return aborted();
+		signal.addEventListener("abort", aborted, { once: true });
 		const attempt = () => {
-			const socket = createConnection(path);
+			socket = createConnection(path);
 			socket.once("connect", () => {
+				signal.removeEventListener("abort", aborted);
 				socket.removeAllListeners("error");
 				socket.on("error", () => {});
 				resolve(socket);
 			});
-			socket.once("error", () => setTimeout(attempt, 100));
+			socket.once("error", () => {
+				socket.destroy();
+				if (!signal.aborted) retry = setTimeout(attempt, 100);
+			});
 		};
 		attempt();
 	});
 }
+
+type QmpState = {
+	nextId: number;
+	pending: Map<number, { resolve: () => void; reject: (error: Error) => void }>;
+};
+
+const connections = new WeakMap<Socket, QmpState>();
 
 function command(
 	qmp: Socket,
 	execute: string,
 	args?: Record<string, unknown>,
 ): Promise<void> {
-	return new Promise((resolve, reject) => {
+	if (qmp.destroyed || qmp.readableEnded) {
+		return Promise.reject(new Error("QMP connection closed"));
+	}
+	let state = connections.get(qmp);
+	if (!state) {
+		state = { nextId: 0, pending: new Map() };
+		connections.set(qmp, state);
+		const pending = state.pending;
+		const fail = (error: Error) => {
+			for (const request of pending.values()) request.reject(error);
+			pending.clear();
+		};
+		qmp.on("error", fail);
+		qmp.on("end", () => fail(new Error("QMP connection ended")));
+		qmp.on("close", () => fail(new Error("QMP connection closed")));
 		let buffered = "";
-		const onData = (chunk: Buffer) => {
-			buffered += chunk.toString();
+		qmp.setEncoding("utf8");
+		qmp.on("data", (chunk: string) => {
+			buffered += chunk;
 			const lines = buffered.split("\n");
 			buffered = lines.pop() ?? "";
 			for (const line of lines) {
-				if (!line.trim()) {
-					continue;
-				}
+				if (!line.trim()) continue;
 				const message = JSON.parse(line) as QmpMessage;
-				if ("return" in message) {
-					qmp.off("data", onData);
-					resolve();
-					return;
-				}
+				if (message.id === undefined) continue;
+				const request = pending.get(message.id);
+				if (!request) continue;
 				if (message.error) {
-					qmp.off("data", onData);
-					reject(new Error(message.error.desc));
-					return;
+					pending.delete(message.id);
+					request.reject(new Error(message.error.desc));
+				} else if ("return" in message) {
+					pending.delete(message.id);
+					request.resolve();
 				}
 			}
-		};
-		qmp.on("data", onData);
-		qmp.write(`${JSON.stringify({ execute, arguments: args })}\n`);
+		});
+	}
+	const id = state.nextId++;
+	const pending = state.pending;
+	return new Promise((resolve, reject) => {
+		pending.set(id, { resolve, reject });
+		qmp.write(`${JSON.stringify({ execute, arguments: args, id })}\n`);
 	});
 }
