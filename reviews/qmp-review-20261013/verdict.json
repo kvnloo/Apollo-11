@@ -1,0 +1,127 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [
+    "Retain both unchanged idle-control assertion failures as semantic mismatches; use the separately passing fail-closed contract controls, not relabelled old assertions.",
+    "Run actual QEMU/qemu-img disk creation, boot and screenshot-content integration when those binaries are available; this review uses real owned Node children and Unix sockets, not QEMU.",
+    "Keep explicit public-API coverage for error-description conversion, invalid-before-valid coalesced frames, cooperative timer cancellation, and immediate restart after cancellation.",
+    "This narrow repair does not add silent-peer deadlines, frame-size limits, concurrent-start ownership, or SIGKILL escalation to stop() after a successful startup. Those broader contracts remain outside this qualified repair; stop() still relies on SIGTERM there."
+  ],
+  "summary": "Scoped local independent review passes fe2d800: all five frozen regressions, ten supplemental cases and eight additional contract controls pass; six unchanged reviewer controls retain exactly two adjudicated idle-success assertion mismatches. No blocking finding or new race was reproduced in the exercised public-API interleavings. Not real-QEMU, hosted-CI or publication approval.",
+  "execution": {
+    "fresh": true,
+    "revisions": {
+      "original": {
+        "head": "3a19a8c95c4a8de5c42338274986352d2383db7e",
+        "tree": "4fdc8be0682b0fbc2b721242d3eb7ae160423a75",
+        "frozen": {
+          "tests": 5,
+          "pass": 0,
+          "fail": 5
+        },
+        "reviewer": {
+          "tests": 6,
+          "pass": 3,
+          "fail": 3
+        },
+        "supplemental": {
+          "tests": 10,
+          "pass": 1,
+          "fail": 9
+        },
+        "typescript_exit": 0,
+        "receipt": "<operator-artifacts>/apollo-final-review/original-suite.json"
+      },
+      "held": {
+        "head": "f6e9edf932b07e801d9b33cbe9d001849d657a22",
+        "tree": "f439300ec7a3530fb81d23f4dcada83e36411199",
+        "frozen": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0
+        },
+        "reviewer": {
+          "tests": 6,
+          "pass": 2,
+          "fail": 4
+        },
+        "supplemental": {
+          "tests": 10,
+          "pass": 2,
+          "fail": 8
+        },
+        "typescript_exit": 0,
+        "receipt": "<operator-artifacts>/apollo-final-review/held-suite.json"
+      },
+      "candidate": {
+        "head": "fe2d800f4e8bba423ce07879e3a9ad556002492c",
+        "tree": "37093890dedda9805466fe689817614bedfcbb77",
+        "frozen": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0
+        },
+        "reviewer": {
+          "tests": 6,
+          "pass": 4,
+          "fail": 2
+        },
+        "supplemental": {
+          "tests": 10,
+          "pass": 10,
+          "fail": 0
+        },
+        "typescript_exit": 0,
+        "receipt": "<operator-artifacts>/apollo-final-review/candidate-suite.json"
+      }
+    },
+    "additional_contracts": {
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "receipt": "<operator-artifacts>/apollo-final-review/explicit-contract-suite.json",
+      "modes": [
+        "idle-malformed",
+        "idle-null",
+        "pending-conversion",
+        "malformed-batch",
+        "cancel-connect",
+        "spawn-cancel-retry",
+        "stubborn-start",
+        "graceful-start"
+      ]
+    },
+    "candidate_timeouts": 0,
+    "candidate_supervisor_rescues": 0,
+    "successful_explicit_internal_rescues": 0,
+    "natural_exit_required": true
+  },
+  "scope": {
+    "real_qemu": "NOT_RUN; qemu-system-x86_64 and qemu-img absent on PATH",
+    "public_api_signatures_preserved": true,
+    "no_classes": true,
+    "entire_original_and_held_deltas_reviewed": true,
+    "production_delta_files": [
+      "qemu/client.ts"
+    ],
+    "provenance": "Original Cursor Agent authorship and ThePrimeagen coauthorship retained through exact ancestry; independent review credit is not original implementation credit."
+  },
+  "source": {
+    "candidate": {
+      "head": "fe2d800f4e8bba423ce07879e3a9ad556002492c",
+      "tree": "37093890dedda9805466fe689817614bedfcbb77",
+      "source_sha256": "23c162a6e80b75785efec8ac4f4c18d97b08ef1242c606ee9be54afe86769d66"
+    },
+    "held": {
+      "head": "f6e9edf932b07e801d9b33cbe9d001849d657a22",
+      "tree": "f439300ec7a3530fb81d23f4dcada83e36411199",
+      "source_sha256": "cb59d278bb7563ea0852d0aadca76b695fbb9c49d851188e10542b252d5d30e9"
+    },
+    "original": {
+      "head": "3a19a8c95c4a8de5c42338274986352d2383db7e",
+      "tree": "4fdc8be0682b0fbc2b721242d3eb7ae160423a75",
+      "source_sha256": "d44fda2274625bf89c82e6b29c94ebc5bb561f7f9aff68c35f3f6afd9bd60c3c"
+    }
+  }
+}
