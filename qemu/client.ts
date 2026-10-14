@@ -61,8 +61,15 @@ export async function start(vm: Qemu): Promise<void> {
 		qmp?.destroy();
 		if (proc.pid !== undefined && proc.exitCode === null && proc.signalCode === null) {
 			const gone = new Promise<void>((resolve) => proc.once("exit", () => resolve()));
-			proc.kill();
-			await gone;
+			// This child belongs to the failed start: allow 500ms for SIGTERM,
+			// then force termination. Await reaping before exposing the original error.
+			const escalation = setTimeout(() => proc.kill("SIGKILL"), 500);
+			try {
+				proc.kill();
+				await gone;
+			} finally {
+				clearTimeout(escalation);
+			}
 		}
 		vm.proc = undefined;
 		vm.qmp = undefined;
