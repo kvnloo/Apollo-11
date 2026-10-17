@@ -21,14 +21,25 @@ export function newQemu(): Qemu {
 	return { diskPath: undefined, proc: undefined, qmp: undefined };
 }
 
+// Track creations in progress without changing the public Qemu object shape.
+const creatingDisks = new WeakSet<Qemu>();
+
 export async function newDisk(
 	vm: Qemu,
 	path: string,
 	size: string,
 ): Promise<void> {
-	assert(vm.diskPath === undefined, "disk already created");
-	await exec("qemu-img", ["create", "-f", "qcow2", path, size]);
-	vm.diskPath = path;
+	assert(
+		vm.diskPath === undefined && !creatingDisks.has(vm),
+		"disk already created",
+	);
+	creatingDisks.add(vm);
+	try {
+		await exec("qemu-img", ["create", "-f", "qcow2", path, size]);
+		vm.diskPath = path;
+	} finally {
+		creatingDisks.delete(vm);
+	}
 }
 
 export async function start(vm: Qemu): Promise<void> {
