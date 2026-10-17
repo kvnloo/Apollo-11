@@ -33,6 +33,7 @@ export async function newDisk(
 
 export async function start(vm: Qemu): Promise<void> {
 	assert(vm.diskPath !== undefined, "no disk");
+	assert(vm.proc === undefined, "already started");
 	const socketPath = join(dirname(vm.diskPath), "qmp.sock");
 	const proc = spawn(
 		"qemu-system-x86_64",
