@@ -101,8 +101,16 @@ export async function stop(vm: Qemu): Promise<void> {
 	if (proc.exitCode === null && proc.signalCode === null) {
 		// Failed spawn emits close after error, but never emits exit.
 		const gone = new Promise<void>((resolve) => proc.once("close", () => resolve()));
-		proc.kill();
-		await gone;
+		// A QEMU child may ignore SIGTERM: escalate after a bounded grace period.
+		const escalation = setTimeout(() => {
+			if (proc.exitCode === null && proc.signalCode === null) proc.kill("SIGKILL");
+		}, 500);
+		try {
+			proc.kill("SIGTERM");
+			await gone;
+		} finally {
+			clearTimeout(escalation);
+		}
 	}
 	vm.proc = undefined;
 	vm.qmp = undefined;
