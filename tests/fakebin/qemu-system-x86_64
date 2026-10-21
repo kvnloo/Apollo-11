@@ -1,0 +1,35 @@
+#!/usr/bin/env node
+// Protocol stand-in, NOT a real VM and never proof of QEMU compatibility.
+const fs = require('node:fs');
+const net = require('node:net');
+const pidFile = process.env.APOLLO_FAKE_PID_FILE;
+if (pidFile) fs.writeFileSync(pidFile, String(process.pid));
+if (process.env.APOLLO_FAKE_MODE === 'exit') {
+  setTimeout(() => process.exit(19), 150);
+} else if (process.env.APOLLO_FAKE_MODE === 'nosocket') {
+  process.on('SIGTERM', () => {}); // exercise the real SIGKILL escalation
+  setInterval(() => {}, 1000);
+} else {
+  const args = process.argv.slice(2);
+  const index = args.indexOf('-qmp');
+  if (index < 0) process.exit(2);
+  const socketPath = args[index + 1]?.match(/^unix:(.*),server=on,wait=off$/)?.[1];
+  if (!socketPath) process.exit(3);
+  const server = net.createServer((socket) => {
+    socket.write(JSON.stringify({ QMP: { version: {}, capabilities: [] } }) + '\n');
+    let buffered = '';
+    socket.on('data', (chunk) => {
+      buffered += chunk.toString();
+      let newline;
+      while ((newline = buffered.indexOf('\n')) >= 0) {
+        const line = buffered.slice(0, newline); buffered = buffered.slice(newline + 1);
+        if (!line.trim()) continue;
+        const msg = JSON.parse(line);
+        socket.write(JSON.stringify({ id: msg.id, return: {} }) + '\n');
+      }
+    });
+  });
+  setTimeout(() => server.listen(socketPath), 250);
+  process.on('SIGTERM', () => server.close(() => process.exit(0)));
+  setInterval(() => {}, 1000);
+}
