@@ -25,6 +25,7 @@ if (process.env.APOLLO_FAKE_MODE === 'exit') {
         const line = buffered.slice(0, newline); buffered = buffered.slice(newline + 1);
         if (!line.trim()) continue;
         const msg = JSON.parse(line);
+        if (process.env.APOLLO_FAKE_MODE === 'stallcaps' && msg.execute === 'qmp_capabilities') continue;
         socket.write(JSON.stringify({ id: msg.id, return: {} }) + '\n');
       }
     });
